@@ -25,6 +25,30 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [originalFileSize, setOriginalFileSize] = useState<number>(0);
+  const [estimatedSize, setEstimatedSize] = useState<number>(0);
+
+  const calculateEstimatedSize = (imageDataUrl: string, compressionQuality: number) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            setEstimatedSize(blob.size);
+          }
+        },
+        'image/jpeg',
+        compressionQuality
+      );
+    };
+    img.src = imageDataUrl;
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -32,10 +56,19 @@ export default function App() {
       setOriginalFileSize(file.size);
       const reader = new FileReader();
       reader.onload = (event) => {
-        setUploadedImage(event.target?.result as string);
+        const dataUrl = event.target?.result as string;
+        setUploadedImage(dataUrl);
         setCompressedImage(null);
+        calculateEstimatedSize(dataUrl, quality);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleQualityChange = (newQuality: number) => {
+    setQuality(newQuality);
+    if (uploadedImage) {
+      calculateEstimatedSize(uploadedImage, newQuality);
     }
   };
 
@@ -194,7 +227,7 @@ export default function App() {
                 </div>
                 <div className="bg-[#3d4d6f] text-white px-4 py-2 rounded-lg">
                   <p className="font-['IBM_Plex_Sans:Medium',sans-serif] text-[14px]">
-                    Estimated: {formatFileSize(Math.round(originalFileSize * (0.15 + quality * 0.65)))}
+                    Estimated: {estimatedSize > 0 ? formatFileSize(estimatedSize) : 'Calculating...'}
                   </p>
                 </div>
               </div>
@@ -218,7 +251,7 @@ export default function App() {
                     max="1"
                     step="0.05"
                     value={quality}
-                    onChange={(e) => setQuality(parseFloat(e.target.value))}
+                    onChange={(e) => handleQualityChange(parseFloat(e.target.value))}
                     className="w-full h-2 bg-[#e8f0ff] rounded-lg appearance-none cursor-pointer accent-[#0b40a0]"
                   />
                   <div className="flex justify-between text-[12px] text-[#8e98a8] mt-1">
