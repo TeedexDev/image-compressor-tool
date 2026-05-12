@@ -185,11 +185,16 @@ export default function App() {
           {/* Image Preview & Compression Controls */}
           {uploadedImage && !compressedImage && (
             <div className="space-y-6">
-              {/* Original File Size Display */}
-              <div className="flex justify-end">
+              {/* File Size Display */}
+              <div className="flex justify-end gap-2">
                 <div className="bg-[#0b40a0] text-white px-4 py-2 rounded-lg">
                   <p className="font-['IBM_Plex_Sans:Medium',sans-serif] text-[14px]">
                     Original: {formatFileSize(originalFileSize)}
+                  </p>
+                </div>
+                <div className="bg-[#3d4d6f] text-white px-4 py-2 rounded-lg">
+                  <p className="font-['IBM_Plex_Sans:Medium',sans-serif] text-[14px]">
+                    Estimated: {formatFileSize(Math.round(originalFileSize * (0.15 + quality * 0.65)))}
                   </p>
                 </div>
               </div>
@@ -205,7 +210,7 @@ export default function App() {
               <div className="space-y-4">
                 <div>
                   <label className="block font-['IBM_Plex_Sans:Medium',sans-serif] text-[14px] text-[#3d4d6f] mb-2">
-                    Compression Quality: {Math.round(quality * 100)}% (Est. {formatFileSize(Math.round(originalFileSize * quality))})
+                    Compression Quality: {Math.round(quality * 100)}%
                   </label>
                   <input
                     type="range"
