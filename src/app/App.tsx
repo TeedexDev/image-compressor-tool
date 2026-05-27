@@ -26,8 +26,9 @@ export default function App() {
 
   const [originalFileSize, setOriginalFileSize] = useState<number>(0);
   const [estimatedSize, setEstimatedSize] = useState<number>(0);
+  const [imageFormat, setImageFormat] = useState<string>('image/jpeg');
 
-  const calculateEstimatedSize = (imageDataUrl: string, compressionQuality: number) => {
+  const calculateEstimatedSize = (imageDataUrl: string, compressionQuality: number, format: string) => {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
@@ -37,15 +38,28 @@ export default function App() {
       if (!ctx) return;
 
       ctx.drawImage(img, 0, 0);
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            setEstimatedSize(blob.size);
-          }
-        },
-        'image/jpeg',
-        compressionQuality
-      );
+
+      // For GIF, we don't use quality parameter
+      if (format === 'image/gif') {
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              setEstimatedSize(blob.size);
+            }
+          },
+          format
+        );
+      } else {
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              setEstimatedSize(blob.size);
+            }
+          },
+          format,
+          compressionQuality
+        );
+      }
     };
     img.src = imageDataUrl;
   };
@@ -54,12 +68,17 @@ export default function App() {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith('image/')) {
       setOriginalFileSize(file.size);
+
+      // Determine format - keep GIF as GIF, others as JPEG
+      const format = file.type === 'image/gif' ? 'image/gif' : 'image/jpeg';
+      setImageFormat(format);
+
       const reader = new FileReader();
       reader.onload = (event) => {
         const dataUrl = event.target?.result as string;
         setUploadedImage(dataUrl);
         setCompressedImage(null);
-        calculateEstimatedSize(dataUrl, quality);
+        calculateEstimatedSize(dataUrl, quality, format);
       };
       reader.readAsDataURL(file);
     }
@@ -68,7 +87,7 @@ export default function App() {
   const handleQualityChange = (newQuality: number) => {
     setQuality(newQuality);
     if (uploadedImage) {
-      calculateEstimatedSize(uploadedImage, newQuality);
+      calculateEstimatedSize(uploadedImage, newQuality, imageFormat);
     }
   };
 
@@ -91,39 +110,42 @@ export default function App() {
 
       ctx.drawImage(img, 0, 0);
 
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            const compressedUrl = URL.createObjectURL(blob);
+      // For GIF, we don't use quality parameter
+      const blobCallback = (blob: Blob | null) => {
+        if (blob) {
+          const compressedUrl = URL.createObjectURL(blob);
 
-            // Get original image size
-            fetch(uploadedImage)
-              .then(res => res.blob())
-              .then(originalBlob => {
-                setCompressedImage({
-                  original: {
-                    url: uploadedImage,
-                    size: originalBlob.size,
-                    width: img.width,
-                    height: img.height,
-                  },
-                  compressed: {
-                    url: compressedUrl,
-                    size: blob.size,
-                    width: img.width,
-                    height: img.height,
-                  },
-                  compressionRatio: ((1 - blob.size / originalBlob.size) * 100),
-                });
-                setIsCompressing(false);
+          // Get original image size
+          fetch(uploadedImage)
+            .then(res => res.blob())
+            .then(originalBlob => {
+              setCompressedImage({
+                original: {
+                  url: uploadedImage,
+                  size: originalBlob.size,
+                  width: img.width,
+                  height: img.height,
+                },
+                compressed: {
+                  url: compressedUrl,
+                  size: blob.size,
+                  width: img.width,
+                  height: img.height,
+                },
+                compressionRatio: ((1 - blob.size / originalBlob.size) * 100),
               });
-          } else {
-            setIsCompressing(false);
-          }
-        },
-        'image/jpeg',
-        quality
-      );
+              setIsCompressing(false);
+            });
+        } else {
+          setIsCompressing(false);
+        }
+      };
+
+      if (imageFormat === 'image/gif') {
+        canvas.toBlob(blobCallback, imageFormat);
+      } else {
+        canvas.toBlob(blobCallback, imageFormat, quality);
+      }
     };
 
     img.src = uploadedImage;
@@ -132,9 +154,10 @@ export default function App() {
   const downloadCompressed = () => {
     if (!compressedImage) return;
 
+    const extension = imageFormat === 'image/gif' ? 'gif' : 'jpg';
     const link = document.createElement('a');
     link.href = compressedImage.compressed.url;
-    link.download = `compressed-image-${Date.now()}.jpg`;
+    link.download = `compressed-image-${Date.now()}.${extension}`;
     link.click();
   };
 
@@ -241,24 +264,33 @@ export default function App() {
               </div>
 
               <div className="space-y-4">
-                <div>
-                  <label className="block font-['IBM_Plex_Sans:Medium',sans-serif] text-[14px] text-[#3d4d6f] mb-2">
-                    Compression Quality: {Math.round(quality * 100)}%
-                  </label>
-                  <input
-                    type="range"
-                    min="0.1"
-                    max="1"
-                    step="0.05"
-                    value={quality}
-                    onChange={(e) => handleQualityChange(parseFloat(e.target.value))}
-                    className="w-full h-2 bg-[#e8f0ff] rounded-lg appearance-none cursor-pointer accent-[#0b40a0]"
-                  />
-                  <div className="flex justify-between text-[12px] text-[#8e98a8] mt-1">
-                    <span>Lower quality (smaller file)</span>
-                    <span>Higher quality (larger file)</span>
+                {imageFormat !== 'image/gif' && (
+                  <div>
+                    <label className="block font-['IBM_Plex_Sans:Medium',sans-serif] text-[14px] text-[#3d4d6f] mb-2">
+                      Compression Quality: {Math.round(quality * 100)}%
+                    </label>
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="1"
+                      step="0.05"
+                      value={quality}
+                      onChange={(e) => handleQualityChange(parseFloat(e.target.value))}
+                      className="w-full h-2 bg-[#e8f0ff] rounded-lg appearance-none cursor-pointer accent-[#0b40a0]"
+                    />
+                    <div className="flex justify-between text-[12px] text-[#8e98a8] mt-1">
+                      <span>Lower quality (smaller file)</span>
+                      <span>Higher quality (larger file)</span>
+                    </div>
                   </div>
-                </div>
+                )}
+                {imageFormat === 'image/gif' && (
+                  <div className="bg-[#fff9e6] border border-[#ffd666] rounded-lg p-4">
+                    <p className="font-['IBM_Plex_Sans:Regular',sans-serif] text-[13px] text-[#8e5c00]">
+                      Note: GIF format doesn't support quality adjustment. The image will be optimized automatically.
+                    </p>
+                  </div>
+                )}
 
                 <button
                   onClick={compressImage}
